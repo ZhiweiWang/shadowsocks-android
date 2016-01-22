@@ -44,6 +44,7 @@ import java.lang.Process
 import java.net.{Inet6Address, InetAddress}
 import java.util.Locale
 
+import android.app.Service
 import android.content._
 import android.content.pm.{PackageInfo, PackageManager}
 import android.net.{ConnectivityManager, Network}
@@ -331,6 +332,8 @@ class ShadowsocksNatService extends BaseService {
     ConfigUtils.refresh(this)
   }
 
+  override def onStartCommand(intent: Intent, flags: Int, startId: Int): Int = Service.START_STICKY
+
   def killProcesses() {
     if (sslocalProcess != null) {
       sslocalProcess.destroy()
@@ -368,7 +371,7 @@ class ShadowsocksNatService extends BaseService {
     init_sb.append(cmd_bypass.replace("-d 0.0.0.0", "--dport 53"))
 
     init_sb.append(Utils.getIptables
-      + " -t nat -A OUTPUT -p udp --dport 53 -j DNAT --to-destination 127.0.0.1:" + 8153)
+      + " -t nat -A OUTPUT -p udp --dport 53 -j DNAT --to-destination 127.0.0.1:8153")
 
     if (!config.isProxyApps || config.isBypassApps) {
       http_sb.append(Utils.getIptables + CMD_IPTABLES_DNAT_ADD_SOCKS)
@@ -390,13 +393,10 @@ class ShadowsocksNatService extends BaseService {
   }
 
   override def startRunner(config: Config) {
-
-    changeState(State.CONNECTING)
     if (!Console.isRoot) {
       changeState(State.STOPPED, getString(R.string.nat_no_root))
       return
     }
-
     super.startRunner(config)
 
     // register close receiver
@@ -410,6 +410,8 @@ class ShadowsocksNatService extends BaseService {
     registerReceiver(closeReceiver, filter)
 
     ShadowsocksApplication.track(TAG, "start")
+    
+    changeState(State.CONNECTING)
 
     ThrowableFuture {
       if (config.proxy == "198.199.101.152") {
@@ -458,8 +460,6 @@ class ShadowsocksNatService extends BaseService {
 
   override def stopRunner() {
 
-    super.stopRunner()
-
     // channge the state
     changeState(State.STOPPING)
 
@@ -476,17 +476,7 @@ class ShadowsocksNatService extends BaseService {
     // reset NAT
     killProcesses()
 
-    // stop the service if no callback registered
-    if (getCallbackCount == 0) {
-      stopSelf()
-    }
-
-    // change the state
-    changeState(State.STOPPED)
-  }
-
-  override def stopBackgroundService() {
-    stopSelf()
+    super.stopRunner()
   }
 
   override def getTag = TAG

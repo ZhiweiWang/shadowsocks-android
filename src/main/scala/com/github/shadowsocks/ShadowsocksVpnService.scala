@@ -49,6 +49,8 @@ import android.net.VpnService
 import android.os._
 import android.util.Log
 import android.widget.Toast
+import android.content.pm.PackageManager.NameNotFoundException
+
 import com.github.shadowsocks.aidl.Config
 import com.github.shadowsocks.utils._
 import org.apache.commons.net.util.SubnetUtils
@@ -113,8 +115,6 @@ class ShadowsocksVpnService extends VpnService with BaseService {
 
   override def stopRunner() {
 
-    super.stopRunner()
-
     if (vpnThread != null) {
       vpnThread.stopThread()
       vpnThread = null
@@ -136,19 +136,13 @@ class ShadowsocksVpnService extends VpnService with BaseService {
       conn = null
     }
 
-    // stop the service if no callback registered
-    if (getCallbackCount == 0) {
-      stopSelf()
-    }
-
     // clean up recevier
     if (closeReceiver != null) {
       unregisterReceiver(closeReceiver)
       closeReceiver = null
     }
 
-    // channge the state
-    changeState(State.STOPPED)
+    super.stopRunner()
   }
 
   def getVersionName: String = {
@@ -389,10 +383,15 @@ class ShadowsocksVpnService extends VpnService with BaseService {
 
       if (config.isProxyApps) {
         for (pkg <- config.proxiedAppString.split('\n')) {
-          if (!config.isBypassApps) {
-            builder.addAllowedApplication(pkg)
-          } else {
-            builder.addDisallowedApplication(pkg)
+          try {
+            if (!config.isBypassApps) {
+              builder.addAllowedApplication(pkg)
+            } else {
+              builder.addDisallowedApplication(pkg)
+            }
+          } catch {
+            case ex: NameNotFoundException =>
+              Log.e(TAG, "Invalid package name", ex);
           }
         }
       }
@@ -456,10 +455,6 @@ class ShadowsocksVpnService extends VpnService with BaseService {
       .start()
 
     fd
-  }
-
-  override def stopBackgroundService() {
-    stopSelf()
   }
 
   override def getTag = TAG
